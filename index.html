@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#243b6b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Schedule">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Schedule</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172033;background:#f4f6fb}
+*{box-sizing:border-box}body{margin:0;padding:env(safe-area-inset-top) 16px env(safe-area-inset-bottom);max-width:720px;margin-inline:auto}
+header{padding:24px 4px 12px}h1{margin:0;font-size:32px;color:#243b6b}header p{margin:6px 0;color:#65718a}
+.card{background:white;border-radius:18px;padding:16px;margin:12px 0;box-shadow:0 3px 16px #1c31500d}
+label{display:block;font-size:13px;font-weight:650;color:#59657c;margin:10px 0 5px}
+input,select{width:100%;padding:13px;border:1px solid #d9dfeb;border-radius:11px;font-size:16px;background:white;color:#172033}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+button{border:0;border-radius:12px;padding:13px 15px;font-size:15px;font-weight:700;background:#243b6b;color:white;margin-top:12px}
+button.secondary{background:#e9eef8;color:#243b6b}button.danger{background:#fff0f0;color:#a52b35}
+.task{display:flex;align-items:center;gap:10px;border-bottom:1px solid #edf0f5;padding:12px 0}
+.task:last-child{border:0}.task input[type=checkbox]{width:22px;height:22px;flex:none}
+.task-main{flex:1;min-width:0}.task-name{font-weight:700;overflow-wrap:anywhere}.meta{font-size:13px;color:#6b7690;margin-top:3px}
+.done .task-name{text-decoration:line-through;color:#8b94a6}
+.small{font-size:12px;color:#6b7690;line-height:1.5}
+.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{flex:1}
+#empty{color:#758099;text-align:center;padding:20px 4px}
+</style>
+</head>
+<body>
+<header><h1>Schedule</h1><p>Your day, your timetable.</p></header>
+<section class="card">
+  <h2 style="font-size:18px;margin:0">Add a task</h2>
+  <form id="taskForm">
+    <label for="taskName">Task name</label><input id="taskName" required maxlength="70" placeholder="e.g. Biology revision">
+    <div class="row">
+      <div><label for="taskTime">Time</label><input id="taskTime" type="time" required></div>
+      <div><label for="taskCategory">Category</label><select id="taskCategory"><option>Study</option><option>Fitness</option><option>School</option><option>Personal</option><option>Break</option></select></div>
+    </div>
+    <button type="submit" style="width:100%">Add to timetable</button>
+  </form>
+</section>
+<section class="card">
+  <h2 style="font-size:18px;margin:0 0 8px">My timetable</h2>
+  <div id="tasks"></div>
+  <div class="actions">
+    <button class="secondary" id="exportBtn">Add reminders to iPhone Calendar</button>
+    <button class="secondary" id="installHelp">Install help</button>
+  </div>
+  <p class="small">Your tasks are saved in this browser on this iPhone. Calendar export creates daily events for the next 30 days, with an alert at each task's start time.</p>
+</section>
+<section class="card">
+  <h2 style="font-size:17px;margin:0 0 6px">About reminders</h2>
+  <p class="small">For reliable alerts while Schedule is closed, add the exported events to Apple Calendar and allow Calendar notifications. These are Calendar alerts, not guaranteed Clock-style alarms. Keep your phone's notification and Focus settings in mind.</p>
+</section>
+<script>
+const KEY='schedule-tasks-v1';
+let tasks=[];
+try{tasks=JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){tasks=[]}
+const $=id=>document.getElementById(id);
+function save(){localStorage.setItem(KEY,JSON.stringify(tasks));render()}
+function render(){
+ const root=$('tasks');root.innerHTML='';
+ if(!tasks.length){root.innerHTML='<div id="empty">No tasks yet. Add your first task above.</div>';return}
+ tasks.sort((a,b)=>a.time.localeCompare(b.time));
+ tasks.forEach(t=>{
+  const item=document.createElement('div');item.className='task'+(t.done?' done':'');
+  const check=document.createElement('input');check.type='checkbox';check.checked=!!t.done;check.setAttribute('aria-label','Mark '+t.name+' complete');check.onchange=()=>{t.done=check.checked;save()};
+  const main=document.createElement('div');main.className='task-main';
+  const name=document.createElement('div');name.className='task-name';name.textContent=t.name;
+  const meta=document.createElement('div');meta.className='meta';meta.textContent=t.time+' · '+t.category;
+  main.append(name,meta);
+  const del=document.createElement('button');del.className='danger';del.textContent='Delete';del.style.margin='0';del.style.padding='9px 11px';del.onclick=()=>{tasks=tasks.filter(x=>x.id!==t.id);save()};
+  item.append(check,main,del);root.append(item);
+ });
+}
+$('taskForm').addEventListener('submit',e=>{
+ e.preventDefault();tasks.push({id:Date.now().toString(),name:$('taskName').value.trim(),time:$('taskTime').value,category:$('taskCategory').value,done:false});
+ $('taskName').value='';save();
+});
+function icsEscape(s){return String(s).replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;')}
+function dateKey(d){return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')}
+$('exportBtn').onclick=()=>{
+ if(!tasks.length){alert('Add at least one task first.');return}
+ const lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Schedule//Timetable//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
+ const start=new Date();start.setHours(0,0,0,0);
+ for(let day=0;day<30;day++){
+  const d=new Date(start);d.setDate(start.getDate()+day);
+  for(const t of tasks){
+   const [hh,mm]=t.time.split(':').map(Number);
+   const begin=new Date(d);begin.setHours(hh,mm,0,0);
+   const end=new Date(begin.getTime()+30*60000);
+   const stamp=x=>dateKey(x)+'T'+String(x.getHours()).padStart(2,'0')+String(x.getMinutes()).padStart(2,'0')+'00';
+   lines.push('BEGIN:VEVENT','UID:'+t.id+'-'+dateKey(d)+'@schedule.local','DTSTAMP:'+stamp(new Date()),'DTSTART:'+stamp(begin),'DTEND:'+stamp(end),'SUMMARY:'+icsEscape(t.name),'DESCRIPTION:'+icsEscape(t.category+' reminder from Schedule'),'BEGIN:VALARM','TRIGGER:PT0M','ACTION:DISPLAY','DESCRIPTION:'+icsEscape(t.name),'END:VALARM','END:VEVENT');
+  }
+ }
+ lines.push('END:VCALENDAR');
+ const blob=new Blob([lines.join('\r\n')],{type:'text/calendar;charset=utf-8'});
+ const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='schedule-reminders.ics';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);
+};
+$('installHelp').onclick=()=>alert('In Safari, open this published Schedule page, tap Share, then Add to Home Screen. The Calendar export is what sets up reminders while the app is closed.');
+if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+render();
+</script>
+</body></html>
